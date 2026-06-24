@@ -1,31 +1,29 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  LayoutDashboard,
-  Activity,
-  Truck,
-  AlertTriangle,
-  Settings,
-  ChevronDown,
-  Cloud,
-  Leaf,
-  Search,
+  LayoutDashboard, Activity, Trash2, Truck, Bell, History,
+  AlertTriangle, Users, Settings, Search, ChevronDown, Cloud, Leaf,
 } from "lucide-react";
+import { bins, alerts, users, pengangkutanList } from "@/lib/mock-data";
 import { relativeTime, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/monitoring", label: "Monitoring ECO-01", icon: Activity },
-  { to: "/pengangkutan", label: "Pengangkutan", icon: Truck },
+  { to: "/monitoring", label: "Monitoring Real-Time", icon: Activity },
+  { to: "/bins", label: "Data Tempat Sampah", icon: Trash2 },
+  { to: "/pengangkutan", label: "Pengangkutan Sampah", icon: Truck },
+  { to: "/notifikasi", label: "Notifikasi", icon: Bell },
+  { to: "/riwayat", label: "Riwayat Monitoring", icon: History },
   { to: "/laporan", label: "Laporan Kendala", icon: AlertTriangle },
+  { to: "/users", label: "Manajemen User", icon: Users },
   { to: "/pengaturan", label: "Pengaturan", icon: Settings },
 ] as const;
 
-const searchItems = [
-  { label: "ECO-01 · Fakultas Teknik", desc: "Perangkat EcoBin aktif", to: "/monitoring" as const },
-  { label: "Pengangkutan", desc: "Tindakan lanjutan saat tong penuh", to: "/pengangkutan" as const },
-  { label: "Laporan Kendala", desc: "Catat masalah perangkat", to: "/laporan" as const },
-  { label: "Pengaturan", desc: "Threshold dan integrasi IoT", to: "/pengaturan" as const },
+const globalItems = [
+  ...bins.map((b) => ({ label: `${b.id} · ${b.lokasi}`, desc: `${b.status} · ${b.koneksi}`, to: "/monitoring" as const })),
+  ...alerts.map((a) => ({ label: `${a.binId} · ${a.severity}`, desc: a.pesan, to: "/notifikasi" as const })),
+  ...pengangkutanList.map((r) => ({ label: `${r.id} · ${r.rute}`, desc: `${r.status} · ${r.petugas}`, to: "/pengangkutan" as const })),
+  ...users.map((u) => ({ label: u.nama, desc: `${u.role} · ${u.status}`, to: "/users" as const })),
 ];
 
 export function AppShell({
@@ -48,11 +46,14 @@ export function AppShell({
   const results = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
-    return searchItems.filter((item) => `${item.label} ${item.desc}`.toLowerCase().includes(q));
+    return globalItems
+      .filter((item) => `${item.label} ${item.desc}`.toLowerCase().includes(q))
+      .slice(0, 6);
   }, [search]);
 
   return (
     <div className="min-h-screen flex w-full bg-background text-foreground">
+      {/* Sidebar */}
       <aside
         className={`${
           menuOpen ? "fixed inset-y-0 left-0 z-40 flex" : "hidden"
@@ -67,12 +68,16 @@ export function AppShell({
             <div className="text-[11px] text-muted-foreground">Smart Waste Monitor</div>
           </div>
         </div>
-
         <nav className="flex-1 overflow-y-auto py-3 px-2">
-          <div className="px-3 pt-1 pb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Menu</div>
+          <div className="px-3 pt-1 pb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+            Menu
+          </div>
           <ul className="space-y-0.5">
             {nav.map((item) => {
-              const active = item.to === "/" ? pathname === "/" : pathname === item.to || pathname.startsWith(`${item.to}/`);
+              const active =
+                item.to === "/"
+                  ? pathname === "/"
+                  : pathname === item.to || pathname.startsWith(`${item.to}/`);
               const Icon = item.icon;
               return (
                 <li key={item.to}>
@@ -93,19 +98,19 @@ export function AppShell({
             })}
           </ul>
         </nav>
-
         <div className="px-4 py-3 border-t border-sidebar-border space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className={`h-1.5 w-1.5 rounded-full ${cloudOnline ? "bg-success" : "bg-warning/80"}`} />
-            <span className="font-medium text-foreground/70">{cloudOnline ? "IoT Live" : "Menunggu Telemetry"}</span>
+            <span className="font-medium text-foreground/70">{cloudOnline ? "IoT Live" : "Mode Demo"}</span>
           </div>
           <div className="text-[10.5px] text-muted-foreground/80 leading-snug">
-            {cloudOnline ? "ECO-01 membaca telemetry ThingsBoard melalui HTTP." : "ESP32 belum mengirim data telemetry."}
+            {cloudOnline ? "ECO-01 membaca telemetry ThingsBoard melalui HTTP." : "Data perangkat masih menggunakan simulasi demo."}
           </div>
-          <div className="text-[10.5px] text-muted-foreground/70 pt-0.5">Prototipe 1 perangkat · HTTP ThingsBoard</div>
+          <div className="text-[10.5px] text-muted-foreground/70 pt-0.5">v1.5.0 · HTTP ThingsBoard</div>
         </div>
       </aside>
 
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-border bg-card flex items-center gap-3 px-4 lg:px-6">
           <button
@@ -115,10 +120,11 @@ export function AppShell({
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
-
           <div className="min-w-0 flex-1">
             <h1 className="text-[15px] font-semibold leading-tight truncate">{title}</h1>
-            {subtitle && <div className="text-xs text-muted-foreground leading-snug line-clamp-2">{subtitle}</div>}
+            {subtitle && (
+              <div className="text-xs text-muted-foreground leading-snug line-clamp-2">{subtitle}</div>
+            )}
           </div>
 
           <div className="hidden md:flex items-center gap-2 ml-4 px-2.5 py-1.5 rounded-md border border-border bg-background text-xs">
@@ -128,25 +134,29 @@ export function AppShell({
             </span>
             <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-foreground/80">{cloudOnline ? "ThingsBoard Online" : "IoT belum aktif"}</span>
-            <span className="text-muted-foreground">· {cloudOnline ? relativeTime(live.telemetry?.updatedAt ?? null) : "menunggu data"}</span>
+            <span className="text-muted-foreground">· {cloudOnline ? relativeTime(live.telemetry?.updatedAt ?? null) : "perlu konfigurasi"}</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="relative hidden md:flex items-center gap-2 px-2.5 h-9 rounded-md border border-border bg-background text-sm w-52">
+            <div className="relative hidden md:flex items-center gap-2 px-2.5 h-9 rounded-md border border-border bg-background text-sm w-64">
               <Search className="h-4 w-4 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari fitur…"
+                placeholder="Cari bin, lokasi, petugas…"
                 className="bg-transparent outline-none w-full placeholder:text-muted-foreground"
               />
               {search && (
-                <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border border-border bg-popover shadow-xl overflow-hidden">
+                <div className="absolute right-0 top-10 z-50 w-80 rounded-lg border border-border bg-popover shadow-xl overflow-hidden">
                   {results.length ? (
                     <ul className="py-1.5">
-                      {results.map((item) => (
-                        <li key={item.label}>
-                          <Link to={item.to} onClick={() => setSearch("")} className="block px-3 py-2 hover:bg-muted">
+                      {results.map((item, index) => (
+                        <li key={`${item.label}-${index}`}>
+                          <Link
+                            to={item.to}
+                            onClick={() => setSearch("")}
+                            className="block px-3 py-2 hover:bg-muted"
+                          >
                             <div className="text-sm font-medium truncate">{item.label}</div>
                             <div className="mt-0.5 text-xs text-muted-foreground truncate">{item.desc}</div>
                           </Link>
@@ -159,8 +169,14 @@ export function AppShell({
                 </div>
               )}
             </div>
+            <Link to="/notifikasi" className="relative h-9 w-9 grid place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground">
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+            </Link>
             <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
-              <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-semibold">AR</div>
+              <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
+                AR
+              </div>
               <div className="hidden sm:block leading-tight">
                 <div className="text-[13px] font-medium">Ahmad Rizky</div>
                 <div className="text-[11px] text-muted-foreground">Admin</div>
@@ -171,7 +187,9 @@ export function AppShell({
         </header>
 
         <main className="flex-1 overflow-x-hidden">
-          {actions && <div className="px-4 lg:px-6 pt-4 flex flex-wrap gap-2 justify-end">{actions}</div>}
+          {actions && (
+            <div className="px-4 lg:px-6 pt-4 flex flex-wrap gap-2 justify-end">{actions}</div>
+          )}
           <div className="p-4 lg:p-6">{children}</div>
         </main>
       </div>
