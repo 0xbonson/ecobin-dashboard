@@ -5,6 +5,7 @@ import {
   AlertTriangle, Users, Settings, Search, ChevronDown, Cloud, Leaf,
 } from "lucide-react";
 import { bins, alerts, users, pengangkutanList } from "@/lib/mock-data";
+import { relativeTime, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -39,6 +40,8 @@ export function AppShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const live = useLiveEcoBinTelemetry(5000);
+  const cloudOnline = Boolean(live.telemetry);
 
   const results = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -97,13 +100,13 @@ export function AppShell({
         </nav>
         <div className="px-4 py-3 border-t border-sidebar-border space-y-1.5">
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-warning/80" />
-            <span className="font-medium text-foreground/70">Mode Demo</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${cloudOnline ? "bg-success" : "bg-warning/80"}`} />
+            <span className="font-medium text-foreground/70">{cloudOnline ? "IoT Live" : "Mode Demo"}</span>
           </div>
           <div className="text-[10.5px] text-muted-foreground/80 leading-snug">
-            Data disimulasikan untuk kebutuhan presentasi.
+            {cloudOnline ? "ECO-01 membaca telemetry ThingsBoard melalui HTTP." : "Data perangkat masih menggunakan simulasi demo."}
           </div>
-          <div className="text-[10.5px] text-muted-foreground/70 pt-0.5">v1.4.3 · Build 2026.06</div>
+          <div className="text-[10.5px] text-muted-foreground/70 pt-0.5">v1.5.0 · HTTP ThingsBoard</div>
         </div>
       </aside>
 
@@ -126,12 +129,12 @@ export function AppShell({
 
           <div className="hidden md:flex items-center gap-2 ml-4 px-2.5 py-1.5 rounded-md border border-border bg-background text-xs">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+              {cloudOnline && <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />}
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${cloudOnline ? "bg-success" : "bg-warning"}`} />
             </span>
             <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-foreground/80">Cloud Online</span>
-            <span className="text-muted-foreground">· Update 12 dtk lalu</span>
+            <span className="text-foreground/80">{cloudOnline ? "ThingsBoard Online" : "IoT belum aktif"}</span>
+            <span className="text-muted-foreground">· {cloudOnline ? relativeTime(live.telemetry?.updatedAt ?? null) : "perlu konfigurasi"}</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2">

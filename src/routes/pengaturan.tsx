@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Field, Section, TextInput } from "@/components/ui-bits";
+import { relativeTime, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 
 export const Route = createFileRoute("/pengaturan")({
   head: () => ({ meta: [{ title: "Pengaturan · EcoBin" }] }),
@@ -11,19 +12,16 @@ export const Route = createFileRoute("/pengaturan")({
 
 const defaults = {
   almost: 70,
-  full: 80,
+  full: 90,
   interval: 10,
   notifWeb: true,
   notifMobile: true,
   optimasi: true,
-  mqtt: "mqtts://broker.ecobin.id:8883",
-  topic: "ecobin/devices",
-  api: "https://api.ecobin.id/v1",
-  region: "ap-southeast-1",
 };
 
 function PengaturanPage() {
   const [settings, setSettings] = useState(defaults);
+  const live = useLiveEcoBinTelemetry(5000);
 
   const save = () => {
     if (settings.interval < 5 || settings.interval > 300) {
@@ -34,25 +32,27 @@ function PengaturanPage() {
       toast.error("Threshold hampir penuh harus lebih kecil dari threshold penuh.");
       return;
     }
-    toast.success("Data berhasil disimpan.");
+    toast.success("Preferensi demo disimpan untuk sesi ini.");
   };
 
   const reset = () => {
     setSettings(defaults);
-    toast.message("Perubahan dibatalkan dan pengaturan dikembalikan.");
+    toast.message("Pengaturan dikembalikan ke nilai awal.");
   };
+
+  const connected = Boolean(live.telemetry);
 
   return (
     <AppShell
       title="Pengaturan Sistem"
-      subtitle="Konfigurasi ambang batas, notifikasi, dan integrasi cloud."
+      subtitle="Konfigurasi ambang batas, notifikasi, dan status integrasi IoT."
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Section title="Threshold Sensor" description="Tentukan ambang batas tingkat kepenuhan.">
           <div className="space-y-5">
             <Slider label="Threshold hampir penuh" value={settings.almost} onChange={(almost) => setSettings({ ...settings, almost })} suffix="%" />
             <Slider label="Threshold penuh" value={settings.full} onChange={(full) => setSettings({ ...settings, full })} suffix="%" />
-            <Field label="Interval update data">
+            <Field label="Interval pembaruan dashboard">
               <div className="flex items-center gap-3">
                 <TextInput
                   type="number"
@@ -64,42 +64,74 @@ function PengaturanPage() {
                 />
                 <span className="text-sm text-muted-foreground">detik</span>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">Disarankan 10–30 detik untuk demo dan sensor EcoBin.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Disarankan 5–10 detik untuk demo telemetry EcoBin.</p>
             </Field>
           </div>
         </Section>
 
-        <Section title="Notifikasi" description="Atur kanal pengiriman notifikasi peringatan.">
+        <Section title="Notifikasi" description="Atur kanal peringatan bagi admin dan petugas.">
           <div className="space-y-3">
-            <Toggle label="Notifikasi web" desc="Tampilkan pop-up di dashboard saat ada alert." value={settings.notifWeb} onChange={(notifWeb) => setSettings({ ...settings, notifWeb })} />
+            <Toggle label="Notifikasi web" desc="Tampilkan pemberitahuan di dashboard saat ada alert." value={settings.notifWeb} onChange={(notifWeb) => setSettings({ ...settings, notifWeb })} />
             <Toggle label="Notifikasi mobile" desc="Kirim push notification ke aplikasi petugas." value={settings.notifMobile} onChange={(notifMobile) => setSettings({ ...settings, notifMobile })} />
-            <Toggle label="Optimasi rute otomatis" desc="Saran rute pengangkutan berbasis kepenuhan." value={settings.optimasi} onChange={(optimasi) => setSettings({ ...settings, optimasi })} />
+            <Toggle label="Optimasi rute otomatis" desc="Saran rute pengangkutan berdasarkan prioritas kepenuhan." value={settings.optimasi} onChange={(optimasi) => setSettings({ ...settings, optimasi })} />
           </div>
         </Section>
 
-        <Section title="Koneksi Cloud" description="Konfigurasi broker MQTT dan endpoint API." className="lg:col-span-2">
+        <Section title="Koneksi IoT" description="Integrasi HTTP antara ESP32, ThingsBoard Cloud, dan dashboard EcoBin." className="lg:col-span-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="MQTT Broker URL"><Input value={settings.mqtt} onChange={(e) => setSettings({ ...settings, mqtt: e.target.value })} /></Field>
-            <Field label="Topic prefix"><Input value={settings.topic} onChange={(e) => setSettings({ ...settings, topic: e.target.value })} /></Field>
-            <Field label="API Endpoint"><Input value={settings.api} onChange={(e) => setSettings({ ...settings, api: e.target.value })} /></Field>
-            <Field label="Region"><Input value={settings.region} onChange={(e) => setSettings({ ...settings, region: e.target.value })} /></Field>
+            <InfoField label="Platform IoT" value="ThingsBoard Cloud" />
+            <InfoField label="Protokol telemetry" value="HTTP POST" />
+            <InfoField label="ThingsBoard URL" value="https://thingsboard.cloud" />
+            <InfoField label="Dashboard API" value="/api/ecobin/latest" />
+            <InfoField label="Perangkat terhubung" value={live.telemetry?.deviceName || "ECO-01"} />
+            <InfoField label="Lokasi perangkat" value={live.telemetry?.location || "Fakultas Teknik"} />
           </div>
-          <div className="mt-4 flex items-center justify-between rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
+
+          <div className={`mt-4 flex items-start justify-between gap-4 rounded-md border px-4 py-3 text-sm ${connected ? "border-success/25 bg-success/5" : "border-warning/30 bg-warning/10"}`}>
             <div>
               <div className="font-medium">Status koneksi</div>
-              <div className="text-xs text-muted-foreground">Terhubung ke ThingsBoard Cloud · 1 device demo aktif · HTTP telemetry valid</div>
+              {connected ? (
+                <div className="text-xs text-muted-foreground">
+                  Telemetry HTTP aktif dari {live.telemetry?.deviceName} · pembaruan {relativeTime(live.telemetry?.updatedAt ?? null)}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  {live.loading ? "Memeriksa endpoint telemetry…" : "Integrasi belum aktif. Tambahkan environment variable ThingsBoard di Vercel."}
+                </div>
+              )}
             </div>
-            <span className="inline-flex items-center gap-2 text-success text-xs font-medium">
-              <span className="h-2 w-2 rounded-full bg-success" /> Online
+            <span className={`inline-flex shrink-0 items-center gap-2 text-xs font-medium ${connected ? "text-success" : "text-warning-foreground"}`}>
+              <span className={`h-2 w-2 rounded-full ${connected ? "bg-success" : "bg-warning"}`} />
+              {connected ? "Online" : "Belum dikonfigurasi"}
             </span>
           </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button onClick={reset} className="h-9 px-3 rounded-md border border-border bg-background text-sm hover:bg-muted">Batal</button>
-            <button onClick={save} className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-95">Simpan Perubahan</button>
-          </div>
+
+          {live.error && !live.loading && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Detail: {live.error}
+            </p>
+          )}
+
+          <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+            Credential ThingsBoard disimpan sebagai environment variable Vercel dan tidak dapat diubah melalui browser.
+          </p>
         </Section>
+
+        <div className="lg:col-span-2 flex justify-end gap-2">
+          <button onClick={reset} className="h-9 px-3 rounded-md border border-border bg-background text-sm hover:bg-muted">Batal</button>
+          <button onClick={save} className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-95">Simpan Preferensi</button>
+        </div>
       </div>
     </AppShell>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="min-h-10 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground/90 break-all">{value}</div>
+    </div>
   );
 }
 
@@ -132,8 +164,4 @@ function Toggle({ label, desc, value, onChange }: { label: string; desc: string;
       </span>
     </button>
   );
-}
-
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <TextInput {...props} />;
 }

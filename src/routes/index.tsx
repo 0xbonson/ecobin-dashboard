@@ -13,6 +13,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { Section, StatusPill, FillBar, DemoModal } from "@/components/ui-bits";
 import { bins, alerts, trend7d, distribusiStatus, pengangkutanHarian, type AlertItem } from "@/lib/mock-data";
+import { relativeTime, statusLabel, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -43,6 +44,24 @@ function statusTone(s: string) {
 function DashboardPage() {
   const [readAlerts, setReadAlerts] = useState<Set<string>>(new Set());
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
+  const live = useLiveEcoBinTelemetry(5000);
+
+  const displayBins = live.telemetry
+    ? bins.map((bin) => {
+        if (bin.id !== live.telemetry?.deviceName) return bin;
+        return {
+          ...bin,
+          lokasi: live.telemetry.location || bin.lokasi,
+          kepenuhan: live.telemetry.fillLevel ?? bin.kepenuhan,
+          status: statusLabel(live.telemetry.binStatusText || live.telemetry.binStatus) as typeof bin.status,
+          koneksi: "Online" as const,
+          updateTerakhir: relativeTime(live.telemetry.updatedAt),
+          jarakSensor: live.telemetry.distanceCm ?? bin.jarakSensor,
+          sensorIR: live.telemetry.irDetected ? "Aktif" as const : "Nonaktif" as const,
+          servo: live.telemetry.servoStatus === "open" ? "Normal" as const : live.telemetry.servoStatus === "locked" ? "Tertutup" as const : bin.servo,
+        };
+      })
+    : bins;
 
   return (
     <AppShell
@@ -132,7 +151,7 @@ function DashboardPage() {
         <Section
           className="xl:col-span-2"
           title="Monitoring Tempat Sampah"
-          description="Pembaruan otomatis setiap 10 detik melalui MQTT."
+          description={live.telemetry ? `ECO-01 live · HTTP ThingsBoard · diperbarui ${relativeTime(live.telemetry.updatedAt)}.` : "ECO-01 akan membaca telemetry melalui HTTP setelah integrasi ThingsBoard dikonfigurasi."}
           action={
             <Link to="/monitoring" className="text-xs font-medium text-primary inline-flex items-center gap-1 hover:underline">
               Lihat semua <ArrowUpRight className="h-3 w-3" />
@@ -154,13 +173,13 @@ function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {bins.map((b) => (
+                {displayBins.map((b) => (
                   <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                     <td className="py-2.5 px-5 font-medium tabular-nums">{b.id}</td>
                     <td className="py-2.5 pr-3 text-foreground/80">{b.lokasi}</td>
                     <td className="py-2.5 pr-3"><FillBar value={b.kepenuhan} /></td>
                     <td className="py-2.5 pr-3"><StatusPill tone={statusTone(b.status)}>{b.status}</StatusPill></td>
-                    <td className="py-2.5 pr-3 tabular-nums text-foreground/80">{b.baterai}%</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-foreground/80">{live.telemetry && b.id === live.telemetry.deviceName ? "—" : `${b.baterai}%`}</td>
                     <td className="py-2.5 pr-3">
                       <span className={`text-xs ${b.koneksi === "Online" ? "text-success" : "text-muted-foreground"}`}>
                         {b.koneksi}

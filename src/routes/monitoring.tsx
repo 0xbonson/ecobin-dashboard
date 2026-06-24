@@ -4,6 +4,7 @@ import { Search, X, MapPin, Wifi, Battery } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Section, StatusPill, FillBar } from "@/components/ui-bits";
 import { bins, type Bin } from "@/lib/mock-data";
+import { relativeTime, statusLabel, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 
 export const Route = createFileRoute("/monitoring")({
   head: () => ({ meta: [{ title: "Monitoring Real-Time · EcoBin" }] }),
@@ -22,10 +23,33 @@ function MonitoringPage() {
   const [status, setStatus] = useState("Semua");
   const [lokasi, setLokasi] = useState("Semua");
   const [selected, setSelected] = useState<Bin | null>(null);
+  const live = useLiveEcoBinTelemetry(5000);
 
-  const lokasiList = useMemo(() => ["Semua", ...Array.from(new Set(bins.map((b) => b.lokasi)))], []);
+  const displayBins = useMemo(() => {
+    if (!live.telemetry) return bins;
 
-  const filtered = bins.filter((b) => {
+    const telemetry = live.telemetry;
+    const liveStatus = statusLabel(telemetry.binStatusText || telemetry.binStatus) as Bin["status"];
+
+    return bins.map((bin) => {
+      if (bin.id !== telemetry.deviceName) return bin;
+      return {
+        ...bin,
+        lokasi: telemetry.location || bin.lokasi,
+        kepenuhan: telemetry.fillLevel ?? bin.kepenuhan,
+        status: liveStatus,
+        koneksi: "Online",
+        updateTerakhir: relativeTime(telemetry.updatedAt),
+        jarakSensor: telemetry.distanceCm ?? bin.jarakSensor,
+        sensorIR: telemetry.irDetected ? "Aktif" : "Nonaktif",
+        servo: telemetry.servoStatus === "open" ? "Normal" : telemetry.servoStatus === "locked" ? "Tertutup" : bin.servo,
+      };
+    });
+  }, [live.telemetry]);
+
+  const lokasiList = useMemo(() => ["Semua", ...Array.from(new Set(displayBins.map((b) => b.lokasi)))], [displayBins]);
+
+  const filtered = displayBins.filter((b) => {
     if (status !== "Semua" && b.status !== status) return false;
     if (lokasi !== "Semua" && b.lokasi !== lokasi) return false;
     if (q && !(`${b.id} ${b.lokasi}`.toLowerCase().includes(q.toLowerCase()))) return false;
@@ -97,7 +121,7 @@ function MonitoringPage() {
                   <td className="py-2.5 pr-3 text-foreground/80">{b.lokasi}</td>
                   <td className="py-2.5 pr-3"><FillBar value={b.kepenuhan} /></td>
                   <td className="py-2.5 pr-3"><StatusPill tone={tone(b.status)}>{b.status}</StatusPill></td>
-                  <td className="py-2.5 pr-3 tabular-nums text-foreground/80">{b.baterai}%</td>
+                  <td className="py-2.5 pr-3 tabular-nums text-foreground/80">{live.telemetry && b.id === live.telemetry.deviceName ? "—" : `${b.baterai}%`}</td>
                   <td className="py-2.5 pr-3">
                     <span className={`text-xs ${b.koneksi === "Online" ? "text-success" : "text-muted-foreground"}`}>
                       {b.koneksi} · {b.jenisKoneksi}
@@ -162,7 +186,7 @@ function MonitoringPage() {
                   <Row k="Sensor IR" v={selected.sensorIR} />
                   <Row k="Servo penutup" v={selected.servo} />
                   <Row k="LED / Buzzer" v={selected.ledBuzzer} />
-                  <Row k="Baterai" v={<span className="inline-flex items-center gap-1"><Battery className="h-3.5 w-3.5"/>{selected.baterai}%</span>} />
+                  <Row k="Baterai" v={live.telemetry && selected.id === live.telemetry.deviceName ? "Belum tersedia" : <span className="inline-flex items-center gap-1"><Battery className="h-3.5 w-3.5"/>{selected.baterai}%</span>} />
                   <Row k="Koneksi" v={<span className="inline-flex items-center gap-1"><Wifi className="h-3.5 w-3.5"/>{selected.jenisKoneksi} · {selected.koneksi}</span>} />
                 </dl>
               </div>

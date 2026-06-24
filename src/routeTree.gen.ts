@@ -18,6 +18,7 @@ import { Route as MonitoringRouteImport } from './routes/monitoring'
 import { Route as LaporanRouteImport } from './routes/laporan'
 import { Route as BinsRouteImport } from './routes/bins'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiEcobinLatestRouteImport } from './routes/api/ecobin/latest'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -64,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEcobinLatestRoute = ApiEcobinLatestRouteImport.update({
+  id: '/api/ecobin/latest',
+  path: '/api/ecobin/latest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/latest'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/latest'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/latest'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   PengaturanRoute: typeof PengaturanRoute
   RiwayatRoute: typeof RiwayatRoute
   UsersRoute: typeof UsersRoute
+  ApiEcobinLatestRoute: typeof ApiEcobinLatestRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ecobin/latest': {
+      id: '/api/ecobin/latest'
+      path: '/api/ecobin/latest'
+      fullPath: '/api/ecobin/latest'
+      preLoaderRoute: typeof ApiEcobinLatestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   PengaturanRoute: PengaturanRoute,
   RiwayatRoute: RiwayatRoute,
   UsersRoute: UsersRoute,
+  ApiEcobinLatestRoute: ApiEcobinLatestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
