@@ -120,8 +120,8 @@ export const Route = createFileRoute("/api/ecobin/latest")({
 
           const telemetry: LiveTelemetry = {
             deviceId,
-            deviceName: process.env.TB_DEVICE_NAME || "ECO-01",
-            location: process.env.TB_DEVICE_LOCATION || "Fakultas Teknik",
+            deviceName: process.env.TB_DEVICE_NAME || "Perangkat EcoBin",
+            location: process.env.TB_DEVICE_LOCATION || "Lokasi belum ditentukan",
             fillLevel: toNumber(firstValue(payload, "fillLevel")?.value),
             distanceCm: toNumber(firstValue(payload, "distanceCm")?.value),
             irDetected: toBoolean(firstValue(payload, "irDetected")?.value),
