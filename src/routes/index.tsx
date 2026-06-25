@@ -86,7 +86,7 @@ function DashboardPage() {
               <MapPin className="h-4 w-4" /> {location}
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Data pada halaman ini difokuskan pada satu perangkat fisik yang terhubung ke ThingsBoard Cloud melalui HTTP.
+              Menampilkan kondisi perangkat yang terhubung ke platform IoT melalui HTTP.
             </p>
           </div>
           <div className="rounded-md border border-border bg-muted/30 px-3.5 py-3 text-sm md:min-w-56">
@@ -151,7 +151,7 @@ function DashboardPage() {
             <InfoItem label="Protokol telemetry" value="HTTP POST" />
           </div>
           <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-            Dashboard dirancang agar dapat dikembangkan untuk beberapa perangkat pada tahap berikutnya. Pada demonstrasi ini, hanya telemetry dari {deviceName} yang digunakan sebagai data aktif.
+            Data pada dashboard diperbarui berdasarkan telemetry perangkat yang sedang terhubung.
           </p>
         </Section>
       </div>

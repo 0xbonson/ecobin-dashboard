@@ -52,7 +52,7 @@ function MonitoringPage() {
   return (
     <AppShell
       title="Monitoring Perangkat"
-      subtitle="Detail telemetry langsung dari satu perangkat EcoBin yang terhubung ke ThingsBoard Cloud."
+      subtitle="Detail telemetry, status sensor, dan aktuator dari perangkat yang terhubung ke ThingsBoard Cloud."
     >
       <Section
         title="Perangkat aktif"
