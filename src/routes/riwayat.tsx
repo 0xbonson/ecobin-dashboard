@@ -1,167 +1,379 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-} from "recharts";
 import { AppShell } from "@/components/app-shell";
-import { Field, Section, SelectInput, TextInput } from "@/components/ui-bits";
-import { history, historicalChart, bins, type HistoryEntry } from "@/lib/mock-data";
+import { Section } from "@/components/ui-bits";
+
+type TelemetryRow = {
+  timestamp: number;
+  distanceCm: number | null;
+  fillLevel: number | null;
+  binStatus: string | null;
+  binStatusText: string | null;
+  irDetected: boolean | null;
+  irStatusText: string | null;
+  servoStatus: string | null;
+  ledStatus: string | null;
+  buzzerStatus: string | null;
+};
+
+type HistoryPayload = {
+  ok: boolean;
+  error?: string;
+  device?: {
+    id: string;
+    name: string;
+    location: string;
+  };
+  range?: {
+    minutes: number;
+    startTs: number;
+    endTs: number;
+  };
+  rows?: TelemetryRow[];
+};
 
 export const Route = createFileRoute("/riwayat")({
-  head: () => ({ meta: [{ title: "Riwayat Monitoring · EcoBin" }] }),
+  head: () => ({ meta: [{ title: "Riwayat Telemetry · EcoBin" }] }),
   component: RiwayatPage,
 });
 
-function eventDate(entry: HistoryEntry) {
-  const months: Record<string, string> = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", Mei: "05", Jun: "06", Jul: "07", Agu: "08", Sep: "09", Okt: "10", Nov: "11", Des: "12" };
-  const [day, mon, year] = entry.waktu.split(" ");
-  return `${year}-${months[mon] ?? "06"}-${day.padStart(2, "0")}`;
+function formatDate(timestamp: number) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestamp));
 }
 
-function eventMatches(entry: HistoryEntry, type: string) {
-  if (type === "Semua") return true;
-  const e = entry.event.toLowerCase();
-  if (type === "Threshold penuh") return e.includes("threshold");
-  if (type === "Update telemetry") return e.includes("telemetry");
-  if (type === "Sensor error") return e.includes("sensor");
-  return true;
+function actuatorLabel(value: string | null) {
+  if (!value) return "—";
+
+  const labels: Record<string, string> = {
+    on: "Aktif",
+    off: "Nonaktif",
+    open: "Terbuka",
+    closed: "Tertutup",
+    locked: "Terkunci",
+  };
+
+  return labels[value] || value;
 }
 
-function download(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
+function statusClass(status: string | null) {
+  if (status === "full") {
+    return "bg-destructive/10 text-destructive border-destructive/20";
+  }
+
+  if (status === "almost_full") {
+    return "bg-warning/10 text-warning border-warning/20";
+  }
+
+  if (status === "normal") {
+    return "bg-success/10 text-success border-success/20";
+  }
+
+  return "bg-muted text-muted-foreground border-border";
+}
+
+function csvCell(value: string | number | null) {
+  return `"${String(value ?? "—").replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(rows: TelemetryRow[]) {
+  const header = [
+    "Waktu",
+    "Jarak (cm)",
+    "Kepenuhan (%)",
+    "Status Tong",
+    "Sensor IR",
+    "Servo",
+    "LED",
+    "Buzzer",
+  ];
+
+  const content = [
+    header.map(csvCell).join(","),
+    ...rows.map((row) =>
+      [
+        formatDate(row.timestamp),
+        row.distanceCm,
+        row.fillLevel,
+        row.binStatusText,
+        row.irStatusText,
+        actuatorLabel(row.servoStatus),
+        actuatorLabel(row.ledStatus),
+        actuatorLabel(row.buzzerStatus),
+      ]
+        .map(csvCell)
+        .join(","),
+    ),
+  ].join("\n");
+
+  const blob = new Blob([content], {
+    type: "text/csv;charset=utf-8",
+  });
+
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "riwayat-telemetry-ecobin.csv";
+  link.click();
+
   URL.revokeObjectURL(url);
 }
 
 function RiwayatPage() {
-  const [from, setFrom] = useState("2026-06-11");
-  const [to, setTo] = useState("2026-06-18");
-  const [bin, setBin] = useState("Semua");
-  const [eventType, setEventType] = useState("Semua");
+  const [minutes, setMinutes] = useState<30 | 60>(30);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [payload, setPayload] = useState<HistoryPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => history.filter((h) => {
-    const d = eventDate(h);
-    return (bin === "Semua" || h.binId === bin) && d >= from && d <= to && eventMatches(h, eventType);
-  }), [bin, from, to, eventType]);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadHistory = async () => {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/ecobin/history?minutes=${minutes}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+
+        const data = (await response.json()) as HistoryPayload;
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Riwayat telemetry belum tersedia.");
+        }
+
+        setPayload(data);
+        setError(null);
+      } catch (loadError) {
+        if (controller.signal.aborted) return;
+
+        setPayload(null);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Gagal memuat riwayat telemetry.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadHistory();
+
+    return () => controller.abort();
+  }, [minutes, reloadKey]);
+
+  const rows = payload?.rows ?? [];
+
+  const summary = useMemo(() => {
+    const latest = rows[0] ?? null;
+
+    return {
+      latest,
+      total: rows.length,
+    };
+  }, [rows]);
 
   const exportCsv = () => {
-    const rows = ["Waktu,ID Bin,Lokasi,Event,Kepenuhan,Baterai", ...filtered.map((h) => `"${h.waktu}",${h.binId},"${h.lokasi}","${h.event}",${h.kepenuhan},${h.baterai}`)];
-    download("riwayat-telemetri-ecobin.csv", rows.join("\n"), "text/csv;charset=utf-8");
-    toast.success("Riwayat berhasil diekspor sebagai CSV.");
-  };
-
-  const exportPdf = () => {
-    const html = `<!doctype html><html><head><title>Riwayat Telemetri EcoBin</title><style>body{font-family:Arial,sans-serif;padding:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px;font-size:12px}th{background:#f3f4f6;text-align:left}</style></head><body><h2>Riwayat Telemetri EcoBin</h2><p>Periode ${from} — ${to}</p><table><thead><tr><th>Waktu</th><th>ID Bin</th><th>Lokasi</th><th>Event</th><th>Kepenuhan</th><th>Baterai</th></tr></thead><tbody>${filtered.map((h) => `<tr><td>${h.waktu}</td><td>${h.binId}</td><td>${h.lokasi}</td><td>${h.event}</td><td>${h.kepenuhan}%</td><td>${h.baterai}%</td></tr>`).join("")}</tbody></table><script>window.print()</script></body></html>`;
-    const win = window.open("", "_blank", "width=960,height=700");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      toast.success("Dokumen PDF siap dicetak/disimpan.");
-    } else {
-      toast.error("Popup diblokir. Izinkan popup untuk ekspor PDF.");
+    if (!rows.length) {
+      toast.error("Belum ada data telemetry untuk diekspor.");
+      return;
     }
+
+    downloadCsv(rows);
+    toast.success("Riwayat telemetry berhasil diekspor sebagai CSV.");
   };
 
   return (
     <AppShell
-      title="Riwayat Monitoring"
-      subtitle="Telemetri historis dari seluruh perangkat IoT untuk audit dan analisis."
+      title="Riwayat Telemetry"
+      subtitle="Rekaman data sensor dan aktuator dari perangkat EcoBin yang tersimpan di ThingsBoard."
       actions={
         <>
-          <button onClick={exportCsv} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm hover:bg-muted">
-            <Download className="h-4 w-4" /> Ekspor CSV
+          <button
+            onClick={() => setReloadKey((value) => value + 1)}
+            disabled={loading}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Muat Ulang
           </button>
-          <button onClick={exportPdf} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm hover:bg-muted">
-            <FileText className="h-4 w-4" /> Ekspor PDF
+
+          <button
+            onClick={exportCsv}
+            disabled={!rows.length}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            Unduh CSV
           </button>
         </>
       }
     >
       <Section
-        title="Filter Periode"
-        description="Pilih rentang tanggal dan perangkat untuk membatasi data."
+        title="Rentang Riwayat"
+        description="Data diambil langsung dari telemetry perangkat yang tersimpan di ThingsBoard."
       >
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Field label="Dari tanggal">
-            <TextInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </Field>
-          <Field label="Sampai tanggal">
-            <TextInput type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </Field>
-          <Field label="Perangkat">
-            <SelectInput value={bin} onChange={(e) => setBin(e.target.value)}>
-              <option>Semua</option>
-              {bins.map((b) => <option key={b.id}>{b.id}</option>)}
-            </SelectInput>
-          </Field>
-          <Field label="Tipe event">
-            <SelectInput value={eventType} onChange={(e) => setEventType(e.target.value)}>
-              <option>Semua</option><option>Threshold penuh</option><option>Update telemetry</option><option>Sensor error</option>
-            </SelectInput>
-          </Field>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setMinutes(30)}
+            className={`h-9 rounded-md px-3 text-sm transition-colors ${
+              minutes === 30
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-background hover:bg-muted"
+            }`}
+          >
+            30 Menit Terakhir
+          </button>
+
+          <button
+            onClick={() => setMinutes(60)}
+            className={`h-9 rounded-md px-3 text-sm transition-colors ${
+              minutes === 60
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-background hover:bg-muted"
+            }`}
+          >
+            1 Jam Terakhir
+          </button>
+
+          <div className="ml-auto text-xs text-muted-foreground">
+            {payload?.device
+              ? `${payload.device.name} · ${payload.device.location}`
+              : "Menunggu data perangkat"}
+          </div>
         </div>
       </Section>
 
-      <div className="mt-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <Section
-          title="Tren Kepenuhan Historis"
-          description="Tiga perangkat dengan aktivitas tertinggi hari ini."
+          title="Total Sampel"
+          description="Jumlah data telemetry dalam rentang terpilih."
         >
-          <div className="h-[260px]">
-            <ResponsiveContainer>
-              <AreaChart data={historicalChart} margin={{ left: -10, right: 8, top: 6, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="jam" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} domain={[0, 100]} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="ECO09" name="ECO-09" stroke="var(--primary)" fill="url(#g1)" strokeWidth={2} />
-                <Area type="monotone" dataKey="ECO07" name="ECO-07" stroke="var(--warning)" fillOpacity={0} strokeWidth={2} />
-                <Area type="monotone" dataKey="ECO15" name="ECO-15" stroke="var(--accent)" fillOpacity={0} strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="text-3xl font-semibold tabular-nums">
+            {loading ? "—" : summary.total}
+          </div>
+        </Section>
+
+        <Section
+          title="Pembacaan Terakhir"
+          description="Jarak sensor ultrasonik terakhir yang tercatat."
+        >
+          <div className="text-3xl font-semibold tabular-nums">
+            {summary.latest?.distanceCm == null
+              ? "—"
+              : `${summary.latest.distanceCm.toFixed(1)} cm`}
+          </div>
+        </Section>
+
+        <Section
+          title="Status Terakhir"
+          description="Status tong berdasarkan telemetry terbaru."
+        >
+          <div className="text-3xl font-semibold">
+            {summary.latest?.binStatusText || "—"}
           </div>
         </Section>
       </div>
 
       <div className="mt-4">
-        <Section title="Riwayat Telemetri" description={`${filtered.length} entri pada rentang ${from} — ${to}`}>
+        <Section
+          title="Riwayat Telemetry"
+          description={
+            loading
+              ? "Mengambil data dari ThingsBoard..."
+              : `${rows.length} entri telemetry pada ${minutes} menit terakhir.`
+          }
+        >
+          {error && (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
-                  <th className="text-left font-medium py-2 px-5">Waktu</th>
-                  <th className="text-left font-medium py-2 pr-3">ID Bin</th>
-                  <th className="text-left font-medium py-2 pr-3">Lokasi</th>
-                  <th className="text-left font-medium py-2 pr-3">Event</th>
-                  <th className="text-left font-medium py-2 pr-3">Kepenuhan</th>
-                  <th className="text-left font-medium py-2 px-5">Baterai</th>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-5 py-2 font-medium">Waktu</th>
+                  <th className="py-2 pr-3 font-medium">Jarak</th>
+                  <th className="py-2 pr-3 font-medium">Kepenuhan</th>
+                  <th className="py-2 pr-3 font-medium">Status Tong</th>
+                  <th className="py-2 pr-3 font-medium">IR</th>
+                  <th className="py-2 pr-3 font-medium">Servo</th>
+                  <th className="py-2 pr-3 font-medium">LED</th>
+                  <th className="px-5 py-2 font-medium">Buzzer</th>
                 </tr>
               </thead>
+
               <tbody>
-                {filtered.map((h) => (
-                  <tr key={h.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                    <td className="py-2.5 px-5 text-xs text-foreground/80 tabular-nums">{h.waktu}</td>
-                    <td className="py-2.5 pr-3 font-medium tabular-nums">{h.binId}</td>
-                    <td className="py-2.5 pr-3 text-foreground/80">{h.lokasi}</td>
-                    <td className="py-2.5 pr-3 text-foreground/80">{h.event}</td>
-                    <td className="py-2.5 pr-3 tabular-nums">{h.kepenuhan}%</td>
-                    <td className="py-2.5 px-5 tabular-nums">{h.baterai}%</td>
+                {rows.map((row) => (
+                  <tr
+                    key={row.timestamp}
+                    className="border-b border-border last:border-0 hover:bg-muted/40"
+                  >
+                    <td className="px-5 py-2.5 text-xs tabular-nums text-foreground/80">
+                      {formatDate(row.timestamp)}
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums">
+                      {row.distanceCm == null
+                        ? "—"
+                        : `${row.distanceCm.toFixed(1)} cm`}
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums">
+                      {row.fillLevel == null ? "—" : `${row.fillLevel}%`}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusClass(
+                          row.binStatus,
+                        )}`}
+                      >
+                        {row.binStatusText || "Belum tersedia"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-foreground/80">
+                      {row.irStatusText ||
+                        (row.irDetected ? "Terdeteksi" : "Tidak terdeteksi")}
+                    </td>
+                    <td className="py-2.5 pr-3 text-foreground/80">
+                      {actuatorLabel(row.servoStatus)}
+                    </td>
+                    <td className="py-2.5 pr-3 text-foreground/80">
+                      {actuatorLabel(row.ledStatus)}
+                    </td>
+                    <td className="px-5 py-2.5 text-foreground/80">
+                      {actuatorLabel(row.buzzerStatus)}
+                    </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && <tr><td colSpan={6} className="py-12 text-center text-sm text-muted-foreground">Tidak ada data yang cocok dengan filter.</td></tr>}
+
+                {!loading && !rows.length && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-5 py-12 text-center text-sm text-muted-foreground"
+                    >
+                      Belum ada telemetry pada rentang waktu ini.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

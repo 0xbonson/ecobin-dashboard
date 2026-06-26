@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ChevronDown,
   Cloud,
+  History,
   LayoutDashboard,
   Leaf,
   Settings,
@@ -14,6 +15,7 @@ import { relativeTime, useLiveEcoBinTelemetry } from "@/hooks/use-live-ecobin";
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/monitoring", label: "Monitoring Perangkat", icon: Activity },
+  { to: "/riwayat", label: "Riwayat Telemetry", icon: History },
   { to: "/laporan", label: "Laporan Kendala", icon: AlertTriangle },
   { to: "/pengaturan", label: "Pengaturan", icon: Settings },
 ] as const;

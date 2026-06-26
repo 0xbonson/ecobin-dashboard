@@ -19,6 +19,7 @@ import { Route as LaporanRouteImport } from './routes/laporan'
 import { Route as BinsRouteImport } from './routes/bins'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiEcobinLatestRouteImport } from './routes/api/ecobin/latest'
+import { Route as ApiEcobinHistoryRouteImport } from './routes/api/ecobin/history'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -70,6 +71,11 @@ const ApiEcobinLatestRoute = ApiEcobinLatestRouteImport.update({
   path: '/api/ecobin/latest',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEcobinHistoryRoute = ApiEcobinHistoryRouteImport.update({
+  id: '/api/ecobin/history',
+  path: '/api/ecobin/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/history': typeof ApiEcobinHistoryRoute
   '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/history': typeof ApiEcobinHistoryRoute
   '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/pengaturan': typeof PengaturanRoute
   '/riwayat': typeof RiwayatRoute
   '/users': typeof UsersRoute
+  '/api/ecobin/history': typeof ApiEcobinHistoryRoute
   '/api/ecobin/latest': typeof ApiEcobinLatestRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/history'
     | '/api/ecobin/latest'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/history'
     | '/api/ecobin/latest'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/pengaturan'
     | '/riwayat'
     | '/users'
+    | '/api/ecobin/history'
     | '/api/ecobin/latest'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   PengaturanRoute: typeof PengaturanRoute
   RiwayatRoute: typeof RiwayatRoute
   UsersRoute: typeof UsersRoute
+  ApiEcobinHistoryRoute: typeof ApiEcobinHistoryRoute
   ApiEcobinLatestRoute: typeof ApiEcobinLatestRoute
 }
 
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEcobinLatestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ecobin/history': {
+      id: '/api/ecobin/history'
+      path: '/api/ecobin/history'
+      fullPath: '/api/ecobin/history'
+      preLoaderRoute: typeof ApiEcobinHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -245,6 +265,7 @@ const rootRouteChildren: RootRouteChildren = {
   PengaturanRoute: PengaturanRoute,
   RiwayatRoute: RiwayatRoute,
   UsersRoute: UsersRoute,
+  ApiEcobinHistoryRoute: ApiEcobinHistoryRoute,
   ApiEcobinLatestRoute: ApiEcobinLatestRoute,
 }
 export const routeTree = rootRouteImport
