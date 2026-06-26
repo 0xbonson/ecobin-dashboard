@@ -121,7 +121,12 @@ export const Route = createFileRoute("/api/ecobin/history")({
 
         const requestUrl = new URL(request.url);
         const requestedMinutes = Number(requestUrl.searchParams.get("minutes"));
-        const minutes = requestedMinutes === 60 ? 60 : 30;
+        const minutes =
+          requestedMinutes === 1440
+            ? 1440
+            : requestedMinutes === 60
+              ? 60
+              : 30;
 
         const endTs = Date.now();
         const startTs = endTs - minutes * 60 * 1000;
@@ -136,7 +141,7 @@ export const Route = createFileRoute("/api/ecobin/history")({
           endpoint.searchParams.set("keys", TELEMETRY_KEYS.join(","));
           endpoint.searchParams.set("startTs", String(startTs));
           endpoint.searchParams.set("endTs", String(endTs));
-          endpoint.searchParams.set("limit", minutes === 60 ? "2500" : "1500");
+          endpoint.searchParams.set("limit", minutes === 1440 ? "5000" : minutes === 60 ? "2500" : "1500");
           endpoint.searchParams.set("orderBy", "ASC");
 
           const response = await fetch(endpoint, {

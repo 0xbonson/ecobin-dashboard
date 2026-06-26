@@ -129,7 +129,7 @@ function downloadCsv(rows: TelemetryRow[]) {
 }
 
 function RiwayatPage() {
-  const [minutes, setMinutes] = useState<30 | 60>(30);
+  const [minutes, setMinutes] = useState<30 | 60 | 1440>(1440);
   const [reloadKey, setReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<HistoryPayload | null>(null);
@@ -251,6 +251,17 @@ function RiwayatPage() {
             }`}
           >
             1 Jam Terakhir
+          </button>
+
+          <button
+            onClick={() => setMinutes(1440)}
+            className={`h-9 rounded-md px-3 text-sm transition-colors ${
+              minutes === 1440
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-background hover:bg-muted"
+            }`}
+          >
+            24 Jam Terakhir
           </button>
 
           <div className="ml-auto text-xs text-muted-foreground">
